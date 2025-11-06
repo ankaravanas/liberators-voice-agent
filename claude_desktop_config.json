@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "voice-agent-automation": {
+      "command": "python3",
+      "args": [
+        "/Users/andreaskaravanas/voice-mcp-server-liberators/voice_agent_mcp_server.py"
+      ],
+      "env": {
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  }
+}
