@@ -633,13 +633,5 @@ def capture_clickup_lead(business_info: Dict[str, Any], url: str) -> None:
 
 
 if __name__ == "__main__":
-    # Use stdio for MCP Inspector, streamable-http for Railway deployment
-    transport = os.environ.get("MCP_TRANSPORT", "stdio")
-    
-    if transport == "stdio":
-        print("Starting Voice Agent MCP Server (stdio)...", file=sys.stderr)
-        mcp.run(transport="stdio")
-    else:
-        port = int(os.environ.get("PORT", 8000))
-        print(f"Starting Voice Agent MCP Server on port {port}...", file=sys.stderr)
-        mcp.run(transport="streamable-http", port=port, host="0.0.0.0", middleware=[cors_middleware])
+    port = int(os.environ.get("PORT", 8000))
+    mcp.run(transport="streamable-http", port=port, host="0.0.0.0", middleware=[cors_middleware])

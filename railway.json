@@ -4,6 +4,6 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "MCP_TRANSPORT=http python voice_agent_mcp_server.py"
+    "startCommand": "python voice_agent_mcp_server.py"
   }
 }
