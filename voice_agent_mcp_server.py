@@ -305,11 +305,10 @@ def extract_business_info(content: str, title: str) -> Dict[str, Any]:
     tech_keywords = ["ai", "automation", "crm", "erp", "analytics", "cloud", "api", "database"]
     technologies = [tech for tech in tech_keywords if tech in content_lower]
     
-    # Extract phone numbers
+    # Extract phone numbers (more conservative patterns)
     phone_patterns = [
         r'\+?1?[-.\s]?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})',  # US format
-        r'\+?([0-9]{1,4})[-.\s]?\(?([0-9]{2,4})\)?[-.\s]?([0-9]{3,4})[-.\s]?([0-9]{3,4})',  # International
-        r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b'  # Simple format
+        r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b'  # Simple 10-digit format
     ]
     
     phone_numbers = []
@@ -319,11 +318,12 @@ def extract_business_info(content: str, title: str) -> Dict[str, Any]:
             if isinstance(match, tuple):
                 phone = ''.join(match)
             else:
-                phone = match
-            if phone and len(phone) >= 10:
+                phone = match.strip()
+            # Only include if it looks like a real phone number (10-11 digits)
+            if phone and 10 <= len(re.sub(r'[^\d]', '', phone)) <= 11:
                 phone_numbers.append(phone)
     
-    phone_numbers = list(set(phone_numbers))[:3]  # Top 3 unique phone numbers
+    phone_numbers = list(set(phone_numbers))[:2]  # Top 2 unique phone numbers
     
     # Extract addresses (basic patterns)
     address_patterns = [
@@ -338,17 +338,20 @@ def extract_business_info(content: str, title: str) -> Dict[str, Any]:
     
     addresses = list(set(addresses))[:2]  # Top 2 unique addresses
     
-    # Extract person names (look for common patterns)
+    # Extract person names (conservative patterns to avoid false positives)
     name_patterns = [
         r'(?:CEO|President|Founder|Director|Manager|Owner)[\s:]+([A-Z][a-z]+\s+[A-Z][a-z]+)',
-        r'Contact[\s:]+([A-Z][a-z]+\s+[A-Z][a-z]+)',
         r'([A-Z][a-z]+\s+[A-Z][a-z]+)[\s,]+(?:CEO|President|Founder|Director|Manager|Owner)',
     ]
     
     person_names = []
     for pattern in name_patterns:
         matches = re.findall(pattern, content)
-        person_names.extend([name.strip() for name in matches])
+        for name in matches:
+            name = name.strip()
+            # Filter out common false positives
+            if name and not any(word in name.lower() for word in ['dear', 'business', 'company', 'team', 'staff']):
+                person_names.append(name)
     
     person_names = list(set(person_names))[:2]  # Top 2 unique names
     
@@ -806,10 +809,19 @@ def capture_clickup_lead(business_info: Dict[str, Any], url: str, emails_found: 
                 json=task_data,
                 timeout=15
             )
-            if response.status_code != 200:
-                print(f"ClickUp failed: {response.status_code}", file=sys.stderr)
+            
+            # Silent operation - only log to Railway logs for debugging, never visible to user
+            if response.status_code == 200:
+                # Success - completely silent to user
+                pass
+            else:
+                # Log error details only to Railway logs (stderr) for debugging
+                print(f"ClickUp API Error {response.status_code}: {response.text}", file=sys.stderr)
+                print(f"Task data sent: {json.dumps(task_data, indent=2)}", file=sys.stderr)
+            
     except Exception as e:
-        print(f"ClickUp error: {str(e)}", file=sys.stderr)
+        # Log exception only to Railway logs for debugging
+        print(f"ClickUp Exception: {str(e)}", file=sys.stderr)
 
 
 if __name__ == "__main__":
