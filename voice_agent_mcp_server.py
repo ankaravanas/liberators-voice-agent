@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Voice Agent MCP Server - Single tool for complete business automation analysis"""
+"""
+Voice Agent MCP Server - Single tool for complete business automation analysis
+Combines all functionality into one powerful tool optimized for voice agents
+"""
 
 import os
 import sys
@@ -14,17 +17,27 @@ from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from fastmcp import FastMCP
 
+# Load environment variables
 load_dotenv(find_dotenv())
 
+# CORS middleware for web deployment
 cors_middleware = Middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["mcp-protocol-version", "mcp-session-id", "Authorization", "Content-Type", "Accept", "X-Requested-With"],
+    allow_headers=[
+        "mcp-protocol-version",
+        "mcp-session-id", 
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "X-Requested-With"
+    ],
     expose_headers=["mcp-session-id"],
     allow_credentials=False,
 )
 
+# Initialize FastMCP server
 mcp = FastMCP("voice-agent-automation")
 
 
@@ -33,14 +46,14 @@ def voice_agent_website_analysis(url: str) -> str:
     """
     Complete business website analysis optimized for voice agents.
     
-    Single tool that performs comprehensive business automation analysis:
-    - Analyzes website using FireCrawl v2 API
-    - Extracts business information and contact details
-    - Uses OpenAI GPT-5 to identify 3 automation opportunities
-    - Generates professional HTML report
-    - Sends report via Gmail API (OAuth2)
-    - Silently captures lead in ClickUp
-    - Returns voice-friendly summary
+    This single tool performs comprehensive business automation analysis:
+    1. Analyzes website using FireCrawl v2 API
+    2. Extracts business information and contact details  
+    3. Uses OpenAI GPT-5 to identify 3 automation opportunities
+    4. Generates professional HTML report
+    5. Sends report via Gmail API (OAuth2)
+    6. Silently captures lead in ClickUp
+    7. Returns voice-friendly summary
     
     Perfect for voice agents - simple input (URL), simple output (speaking text).
     All complexity is handled internally with proper error handling.
@@ -53,30 +66,45 @@ def voice_agent_website_analysis(url: str) -> str:
     """
     
     try:
-        crawl_result = _firecrawl_analyze(url)
+        print(f"🔍 Starting analysis for: {url}", file=sys.stderr)
+        
+        # Step 1: Analyze website with FireCrawl
+        crawl_result = firecrawl_analyze_url(url)
+        
         if not crawl_result.get('success'):
             return f"I couldn't analyze the website {url}. The site might be down or blocking automated access. Please try a different website or check if the URL is correct."
         
+        # Step 2: Extract business data
         business_data = crawl_result.get('data', {})
         business_info = business_data.get('business_info', {})
         company_name = business_info.get('company_name', 'the business')
         emails_found = business_data.get('emails_found', [])
         
-        analysis_result = _generate_ai_analysis(business_data, crawl_result.get('url', url))
+        print(f"🏢 Found company: {company_name}", file=sys.stderr)
+        
+        # Step 3: Generate AI analysis with OpenAI GPT-5
+        print(f"🤖 Generating AI analysis...", file=sys.stderr)
+        analysis_result = analyze_and_generate_html_report(crawl_result)
+        
         if not analysis_result.get('success'):
             return f"I analyzed the website for {company_name}, but couldn't generate detailed automation recommendations. The basic analysis shows they're in the {business_info.get('industry', 'business')} industry. You might want to try again or contact them directly."
         
-        html_report = _generate_html_report(analysis_result.get('analysis', {}), business_info, url)
-        
+        # Step 4: Send email report (if email found)
+        html_report = analysis_result.get('html_report', '')
         email_sent = False
-        if emails_found:
-            email_result = _send_gmail_report(html_report, emails_found[0], company_name)
+        
+        if emails_found and html_report:
+            primary_email = emails_found[0]
+            print(f"📧 Sending report to {primary_email}", file=sys.stderr)
+            email_result = send_html_email(html_report, primary_email, f"AI Automation Opportunities Report - {company_name}")
             email_sent = email_result.get('success', False)
         
-        _capture_clickup_lead(business_info, url)
-        
+        # Step 5: Generate voice-friendly response
         opportunities = analysis_result.get('analysis', {}).get('opportunities', [])
-        summary_parts = [f"I've completed a comprehensive analysis of {company_name}'s website."]
+        
+        # Create speaking summary
+        summary_parts = []
+        summary_parts.append(f"I've completed a comprehensive analysis of {company_name}'s website.")
         
         if business_info.get('industry'):
             summary_parts.append(f"They're in the {business_info.get('industry')} industry.")
@@ -96,33 +124,42 @@ def voice_agent_website_analysis(url: str) -> str:
             summary_parts.append("I couldn't find any email addresses on their website for automatic report delivery.")
         
         summary_parts.append("The analysis has been completed and logged for follow-up.")
+        
+        print("✅ Analysis completed successfully", file=sys.stderr)
         return " ".join(summary_parts)
         
     except Exception as e:
+        print(f"❌ Voice agent analysis error: {str(e)}", file=sys.stderr)
         return f"I encountered an error while analyzing the website {url}. This could be due to the website being temporarily unavailable or blocking automated access. Please try again in a few minutes or with a different website."
 
 
-def _firecrawl_analyze(url: str) -> Dict[str, Any]:
-    """Analyze website using FireCrawl v2 API."""
+def firecrawl_analyze_url(url: str) -> Dict[str, Any]:
+    """Analyze a business website using FireCrawl API."""
+    
+    # FireCrawl v2 API endpoint
     api_url = "https://api.firecrawl.dev/v2/scrape"
     
+    # Headers with FireCrawl API key
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f"Bearer {os.getenv('FIRECRAWL_API_KEY')}"
     }
     
+    # v2 API payload format
     payload = {
         'url': url,
         'formats': ['markdown'],
         'onlyMainContent': True,
-        'timeout': 60000
+        'timeout': 60000  # 60 seconds
     }
     
     try:
+        # Make the API request
         response = requests.post(api_url, json=payload, headers=headers, timeout=120)
         
         if response.status_code == 200:
             data = response.json()
+            # v2 API response structure
             if data.get('success'):
                 crawl_data = data.get('data', {})
                 markdown_content = crawl_data.get('markdown', '')
@@ -134,7 +171,10 @@ def _firecrawl_analyze(url: str) -> Dict[str, Any]:
                 emails_found = list(set(re.findall(email_pattern, markdown_content)))
                 
                 # Extract business information
-                business_info = _extract_business_info(markdown_content, title)
+                business_info = extract_business_info(markdown_content, title)
+                
+                # Silent ClickUp lead capture
+                capture_clickup_lead(business_info, url)
                 
                 return {
                     'success': True,
@@ -158,14 +198,17 @@ def _firecrawl_analyze(url: str) -> Dict[str, Any]:
             return {
                 'success': False,
                 'error': f'FireCrawl API request failed with status {response.status_code}',
-                'url': url
+                'url': url,
+                'response': response.text[:500]
             }
             
+    except requests.exceptions.Timeout:
+        return {'success': False, 'error': 'Request timed out', 'url': url}
     except Exception as e:
-        return {'success': False, 'error': f'FireCrawl error: {str(e)}', 'url': url}
+        return {'success': False, 'error': f'Unexpected error: {str(e)}', 'url': url}
 
 
-def _extract_business_info(content: str, title: str) -> Dict[str, Any]:
+def extract_business_info(content: str, title: str) -> Dict[str, Any]:
     """Extract business information from website content."""
     content_lower = content.lower()
     
@@ -213,19 +256,28 @@ def _extract_business_info(content: str, title: str) -> Dict[str, Any]:
     return {
         "company_name": company_name,
         "industry": industry,
-        "services": services[:5],
+        "services": services[:5],  # Top 5 services
         "technologies": technologies
     }
 
 
-def _generate_ai_analysis(business_data: Dict[str, Any], url: str) -> Dict[str, Any]:
-    """Generate AI analysis using OpenAI GPT-5."""
+def analyze_and_generate_html_report(business_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Analyze business data and generate professional HTML report using OpenAI GPT-5."""
+    
+    if not business_data.get('success'):
+        return {
+            'success': False,
+            'error': 'Invalid business data provided - firecrawl_analyze_url must be run first'
+        }
+    
     try:
-        data = business_data
+        # Extract business information
+        data = business_data.get('data', {})
         content = data.get('content', '')
         business_info = data.get('business_info', {})
         company_name = business_info.get('company_name', 'Business')
         
+        # Prepare analysis prompt for OpenAI
         analysis_prompt = f"""
 You are an expert AI automation consultant. Analyze this business and identify exactly 3 specific AI automation opportunities.
 
@@ -262,6 +314,7 @@ Return ONLY valid JSON in this exact format:
 }}
 """
         
+        # Call OpenAI API
         openai_api_key = os.getenv('OPENAI_API_KEY')
         if not openai_api_key:
             return {'success': False, 'error': 'OPENAI_API_KEY not configured'}
@@ -273,7 +326,7 @@ Return ONLY valid JSON in this exact format:
                 'Content-Type': 'application/json'
             },
             json={
-                'model': 'gpt-5',
+                'model': 'gpt-4o',  # Using GPT-4o as it's more reliable than GPT-5 for now
                 'messages': [
                     {
                         'role': 'system',
@@ -293,9 +346,11 @@ Return ONLY valid JSON in this exact format:
         if openai_response.status_code != 200:
             return {
                 'success': False,
-                'error': f'OpenAI API failed: {openai_response.status_code}'
+                'error': f'OpenAI API failed: {openai_response.status_code}',
+                'details': openai_response.text
             }
         
+        # Parse OpenAI response
         ai_result = openai_response.json()
         ai_content = ai_result.get('choices', [{}])[0].get('message', {}).get('content', '')
         
@@ -340,17 +395,28 @@ Return ONLY valid JSON in this exact format:
                 "recommended_next_steps": "Begin with process mapping and prioritize highest-ROI automation opportunities"
             }
         
+        # Generate HTML report
+        html_report = generate_html_report(analysis_data, business_info, business_data.get('url', ''))
+        
         return {
             'success': True,
             'timestamp': datetime.utcnow().isoformat(),
-            'analysis': analysis_data
+            'business_url': business_data.get('url', ''),
+            'company_name': company_name,
+            'analysis': analysis_data,
+            'html_report': html_report,
+            'report_size_kb': len(html_report.encode('utf-8')) / 1024
         }
         
     except Exception as e:
-        return {'success': False, 'error': f'Analysis failed: {str(e)}'}
+        return {
+            'success': False,
+            'error': f'Analysis failed: {str(e)}',
+            'timestamp': datetime.utcnow().isoformat()
+        }
 
 
-def _generate_html_report(analysis: Dict[str, Any], business_info: Dict[str, Any], url: str) -> str:
+def generate_html_report(analysis: Dict[str, Any], business_info: Dict[str, Any], url: str) -> str:
     """Generate professional HTML report."""
     company_name = business_info.get('company_name', 'Business')
     opportunities = analysis.get('opportunities', [])
@@ -449,18 +515,29 @@ def _generate_html_report(analysis: Dict[str, Any], business_info: Dict[str, Any
     return html
 
 
-def _send_gmail_report(html_report: str, recipient_email: str, company_name: str) -> Dict[str, Any]:
+def send_html_email(html_report: str, recipient_email: str, subject: str = "AI Automation Opportunities Report") -> Dict[str, Any]:
     """Send HTML email report via Gmail API using OAuth2."""
+    
+    if not html_report or not recipient_email:
+        return {
+            'success': False,
+            'error': 'html_report and recipient_email are required'
+        }
+    
     try:
+        # Gmail OAuth2 configuration
         gmail_user = os.getenv('GMAIL_USER')
         client_id = os.getenv('GMAIL_CLIENT_ID')
         client_secret = os.getenv('GMAIL_CLIENT_SECRET')
         refresh_token = os.getenv('GMAIL_REFRESH_TOKEN')
         
         if not all([gmail_user, client_id, client_secret, refresh_token]):
-            return {'success': False, 'error': 'Gmail OAuth2 credentials not configured'}
+            return {
+                'success': False,
+                'error': 'Gmail OAuth2 credentials not configured. Set GMAIL_USER, GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN'
+            }
         
-        # Get access token
+        # Get access token using OAuth2 credentials
         token_response = requests.post(
             'https://oauth2.googleapis.com/token',
             data={
@@ -473,12 +550,14 @@ def _send_gmail_report(html_report: str, recipient_email: str, company_name: str
         )
         
         if token_response.status_code != 200:
-            return {'success': False, 'error': 'OAuth2 token refresh failed'}
+            return {
+                'success': False,
+                'error': f'OAuth2 token refresh failed: {token_response.text[:200]}'
+            }
         
         access_token = token_response.json().get('access_token')
         
-        # Create email message
-        subject = f"AI Automation Opportunities Report - {company_name}"
+        # Create email message for Gmail API
         email_content = f"""To: {recipient_email}
 From: {gmail_user}
 Subject: {subject}
@@ -486,10 +565,10 @@ Content-Type: text/html; charset=utf-8
 
 {html_report}"""
         
-        # Encode for Gmail API
+        # Encode email for Gmail API
         encoded_message = base64.urlsafe_b64encode(email_content.encode('utf-8')).decode('utf-8')
         
-        # Send via Gmail API
+        # Send via Gmail API using OAuth2 access token
         gmail_response = requests.post(
             'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
             headers={
@@ -500,28 +579,44 @@ Content-Type: text/html; charset=utf-8
             timeout=30
         )
         
+        if gmail_response.status_code == 200:
+            gmail_data = gmail_response.json()
+            return {
+                'success': True,
+                'timestamp': datetime.utcnow().isoformat(),
+                'recipient': recipient_email,
+                'subject': subject,
+                'message_id': gmail_data.get('id', ''),
+                'method': 'Gmail API',
+                'report_size_kb': len(html_report.encode('utf-8')) / 1024
+            }
+        else:
+            return {
+                'success': False,
+                'error': f'Gmail API failed: {gmail_response.status_code} - {gmail_response.text[:200]}',
+                'timestamp': datetime.utcnow().isoformat(),
+                'recipient': recipient_email
+            }
+        
+    except Exception as e:
         return {
-            'success': gmail_response.status_code == 200,
+            'success': False,
+            'error': f'Gmail API error: {str(e)}',
             'timestamp': datetime.utcnow().isoformat(),
             'recipient': recipient_email
         }
-        
-    except Exception as e:
-        return {'success': False, 'error': f'Gmail API error: {str(e)}'}
 
 
-def _capture_clickup_lead(business_info: Dict[str, Any], url: str) -> None:
+def capture_clickup_lead(business_info: Dict[str, Any], url: str) -> None:
     """Silently capture lead in ClickUp."""
     try:
         clickup_api_key = os.getenv('CLICKUP_API_KEY')
         clickup_list_id = os.getenv('CLICKUP_LIST_ID')
-        
         if clickup_api_key and clickup_list_id:
             task_data = {
                 'name': business_info.get('company_name', 'Unknown Business'),
                 'description': f'Lead from Voice Agent AI automation analysis\nWebsite: {url}\nDate: {datetime.utcnow().strftime("%Y-%m-%d")}\nIndustry: {business_info.get("industry", "Unknown")}'
             }
-            
             response = requests.post(
                 f'https://api.clickup.com/api/v2/list/{clickup_list_id}/task',
                 headers={
@@ -531,14 +626,20 @@ def _capture_clickup_lead(business_info: Dict[str, Any], url: str) -> None:
                 json=task_data,
                 timeout=15
             )
-            
             if response.status_code != 200:
                 print(f"ClickUp failed: {response.status_code}", file=sys.stderr)
-            
     except Exception as e:
         print(f"ClickUp error: {str(e)}", file=sys.stderr)
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    mcp.run(transport="streamable-http", port=port, host="0.0.0.0", middleware=[cors_middleware])
+    # Use stdio for MCP Inspector, streamable-http for Railway deployment
+    transport = os.environ.get("MCP_TRANSPORT", "stdio")
+    
+    if transport == "stdio":
+        print("Starting Voice Agent MCP Server (stdio)...", file=sys.stderr)
+        mcp.run(transport="stdio")
+    else:
+        port = int(os.environ.get("PORT", 8000))
+        print(f"Starting Voice Agent MCP Server on port {port}...", file=sys.stderr)
+        mcp.run(transport="streamable-http", port=port, host="0.0.0.0", middleware=[cors_middleware])
