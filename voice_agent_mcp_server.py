@@ -40,6 +40,11 @@ cors_middleware = Middleware(
 # Initialize FastMCP server
 mcp = FastMCP("voice-agent-automation")
 
+# Global variables for caching last analysis results
+_last_html_report = None
+_last_company_name = None
+_last_analysis_timestamp = None
+
 
 @mcp.tool()
 def voice_agent_website_analysis(url: str) -> str:
@@ -91,6 +96,13 @@ def voice_agent_website_analysis(url: str) -> str:
         
         # Step 4: Send email report (if email found)
         html_report = analysis_result.get('html_report', '')
+        
+        # Cache report data for potential manual email sending
+        global _last_html_report, _last_company_name, _last_analysis_timestamp
+        _last_html_report = html_report
+        _last_company_name = company_name
+        _last_analysis_timestamp = datetime.utcnow().isoformat()
+        
         email_sent = False
         
         if emails_found and html_report:
@@ -131,6 +143,46 @@ def voice_agent_website_analysis(url: str) -> str:
     except Exception as e:
         print(f"❌ Voice agent analysis error: {str(e)}", file=sys.stderr)
         return f"I encountered an error while analyzing the website {url}. This could be due to the website being temporarily unavailable or blocking automated access. Please try again in a few minutes or with a different website."
+
+
+@mcp.tool()
+def send_report_to_email(email: str) -> str:
+    """
+    Send the HTML report from the most recent website analysis to a provided email address.
+    
+    This tool should be used when the voice agent couldn't find an email during analysis
+    but the user has provided one manually. It sends the cached report from the last
+    analysis performed by voice_agent_website_analysis.
+    
+    Args:
+        email: The recipient's email address
+        
+    Returns:
+        Simple confirmation message that the report was sent or error message if failed
+    """
+    
+    global _last_html_report, _last_company_name, _last_analysis_timestamp
+    
+    try:
+        # Check if we have a cached report
+        if not _last_html_report or not _last_company_name:
+            return "No recent analysis report found. Please run the website analysis first before sending a report."
+        
+        # Send the cached report
+        result = send_html_email(
+            _last_html_report, 
+            email, 
+            f"AI Automation Opportunities Report - {_last_company_name}"
+        )
+        
+        if result.get('success'):
+            return f"Successfully sent the automation report for {_last_company_name} to {email}."
+        else:
+            return f"Failed to send the report to {email}. Please check the email address and try again."
+            
+    except Exception as e:
+        print(f"❌ Send report error: {str(e)}", file=sys.stderr)
+        return f"An error occurred while sending the report to {email}. Please try again."
 
 
 def firecrawl_analyze_url(url: str) -> Dict[str, Any]:
