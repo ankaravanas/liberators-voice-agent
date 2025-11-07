@@ -16,7 +16,7 @@ Single tool call: `voice_agent_website_analysis`
 ## What It Does
 
 1. **Website Analysis** - FireCrawl v2 API extracts business information
-2. **AI Analysis** - OpenAI GPT-5 identifies 3 automation opportunities  
+2. **AI Analysis** - OpenAI GPT-4 identifies 3 automation opportunities  
 3. **Professional Report** - Generates HTML report with recommendations
 4. **Email Delivery** - Automatically sends report to business email
 5. **Lead Capture** - Silently logs lead in ClickUp
