@@ -54,7 +54,7 @@ def voice_agent_website_analysis(url: str) -> str:
     This single tool performs comprehensive business automation analysis:
     1. Analyzes website using FireCrawl v2 API
     2. Extracts business information and contact details  
-    3. Uses OpenAI GPT-4 to identify 3 automation opportunities
+    3. Uses OpenAI GPT-4o to identify 3 automation opportunities
     4. Generates professional HTML report
     5. Sends report via Gmail API (OAuth2)
     6. Silently captures lead in ClickUp
@@ -87,7 +87,7 @@ def voice_agent_website_analysis(url: str) -> str:
         
         print(f"🏢 Found company: {company_name}", file=sys.stderr)
         
-        # Step 3: Generate AI analysis with OpenAI GPT-4
+        # Step 3: Generate AI analysis with OpenAI GPT-4o
         print(f"🤖 Generating AI analysis...", file=sys.stderr)
         analysis_result = analyze_and_generate_html_report(crawl_result)
         
@@ -367,7 +367,7 @@ def extract_business_info(content: str, title: str) -> Dict[str, Any]:
 
 
 def analyze_and_generate_html_report(business_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Analyze business data and generate professional HTML report using OpenAI GPT-4."""
+    """Analyze business data and generate professional HTML report using OpenAI GPT-4o."""
     
     if not business_data.get('success'):
         return {
@@ -401,6 +401,7 @@ Identify exactly 3 AI automation opportunities that are:
 - Aligned with their business model
 - Focused on ROI within 6-12 months
 - Specific to their industry and operations
+- Do NOT mention any pricing, costs, or fees in your recommendations
 
 Return ONLY valid JSON in this exact format:
 {{
@@ -431,7 +432,7 @@ Return ONLY valid JSON in this exact format:
                 'Content-Type': 'application/json'
             },
             json={
-                'model': 'gpt-4',
+                'model': 'gpt-4o',
                 'messages': [
                     {
                         'role': 'system',
