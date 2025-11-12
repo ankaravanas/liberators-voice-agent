@@ -260,6 +260,94 @@ def firecrawl_analyze_url(url: str) -> Dict[str, Any]:
         return {'success': False, 'error': f'Unexpected error: {str(e)}', 'url': url}
 
 
+def extract_industry_with_ai(content: str, company_name: str) -> str:
+    """Use OpenAI to intelligently detect the business industry."""
+    try:
+        openai_api_key = os.getenv('OPENAI_API_KEY')
+        if not openai_api_key:
+            return "general"
+        
+        prompt = f"""
+Analyze this business content and identify the primary industry category.
+
+Company: {company_name}
+Content: {content}
+
+Return ONLY one word for the industry category. Choose from: technology, consulting, ecommerce, healthcare, finance, marketing, education, manufacturing, retail, services, or general.
+
+Industry:"""
+
+        response = requests.post(
+            'https://api.openai.com/v1/chat/completions',
+            headers={
+                'Authorization': f'Bearer {openai_api_key}',
+                'Content-Type': 'application/json'
+            },
+            json={
+                'model': 'gpt-4o',
+                'messages': [{'role': 'user', 'content': prompt}],
+                'temperature': 0.3,
+                'max_tokens': 50
+            },
+            timeout=20
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            industry = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip().lower()
+            return industry if industry else "general"
+        else:
+            return "general"
+            
+    except Exception:
+        return "general"
+
+
+def extract_technologies_with_ai(content: str, company_name: str) -> List[str]:
+    """Use OpenAI to intelligently extract technologies used by the business."""
+    try:
+        openai_api_key = os.getenv('OPENAI_API_KEY')
+        if not openai_api_key:
+            return []
+        
+        prompt = f"""
+Analyze this business content and identify the main technologies they use or mention.
+
+Company: {company_name}
+Content: {content}
+
+Return ONLY a comma-separated list of technologies (maximum 5). Focus on software, platforms, tools, or technical solutions they use or offer.
+
+Technologies:"""
+
+        response = requests.post(
+            'https://api.openai.com/v1/chat/completions',
+            headers={
+                'Authorization': f'Bearer {openai_api_key}',
+                'Content-Type': 'application/json'
+            },
+            json={
+                'model': 'gpt-4o',
+                'messages': [{'role': 'user', 'content': prompt}],
+                'temperature': 0.3,
+                'max_tokens': 100
+            },
+            timeout=20
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            tech_text = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+            if tech_text:
+                technologies = [tech.strip() for tech in tech_text.split(',')]
+                return [tech for tech in technologies if tech and len(tech) > 1][:5]
+        
+        return []
+            
+    except Exception:
+        return []
+
+
 def extract_business_info(content: str, title: str) -> Dict[str, Any]:
     """Extract business information from website content."""
     content_lower = content.lower()
@@ -267,23 +355,8 @@ def extract_business_info(content: str, title: str) -> Dict[str, Any]:
     # Extract company name from title
     company_name = title.split("-")[0].strip() if title else "Unknown Company"
     
-    # Detect industry
-    industries = {
-        "technology": ["software", "tech", "digital", "app", "platform", "saas", "development"],
-        "consulting": ["consulting", "advisory", "strategy", "expert", "professional services"],
-        "ecommerce": ["shop", "store", "buy", "sell", "product", "ecommerce", "retail"],
-        "healthcare": ["health", "medical", "doctor", "patient", "clinic", "hospital"],
-        "finance": ["finance", "banking", "investment", "financial", "accounting"],
-        "marketing": ["marketing", "advertising", "campaign", "brand", "promotion", "seo"],
-        "education": ["education", "learning", "course", "training", "school"],
-        "manufacturing": ["manufacturing", "production", "factory", "supply"]
-    }
-    
-    industry = "general"
-    for ind, keywords in industries.items():
-        if any(keyword in content_lower for keyword in keywords):
-            industry = ind
-            break
+    # Use OpenAI to intelligently detect industry
+    industry = extract_industry_with_ai(content[:1500], company_name)
     
     # Extract services
     services = []
@@ -301,9 +374,8 @@ def extract_business_info(content: str, title: str) -> Dict[str, Any]:
             else:
                 services.extend([s.strip() for s in match.split(",")])
     
-    # Extract technologies
-    tech_keywords = ["ai", "automation", "crm", "erp", "analytics", "cloud", "api", "database"]
-    technologies = [tech for tech in tech_keywords if tech in content_lower]
+    # Use OpenAI to intelligently extract technologies
+    technologies = extract_technologies_with_ai(content[:1500], company_name)
     
     # Extract phone numbers (more conservative patterns)
     phone_patterns = [
