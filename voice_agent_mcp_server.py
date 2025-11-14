@@ -260,6 +260,48 @@ def firecrawl_analyze_url(url: str) -> Dict[str, Any]:
         return {'success': False, 'error': f'Unexpected error: {str(e)}', 'url': url}
 
 
+def detect_content_language(content: str) -> str:
+    """Use OpenAI to detect the primary language of website content."""
+    try:
+        openai_api_key = os.getenv('OPENAI_API_KEY')
+        if not openai_api_key:
+            return "English"
+        
+        prompt = f"""
+Analyze this website content and identify the primary language.
+
+Content: {content}
+
+Return ONLY the language name in English (e.g., "English", "Greek", "Spanish", "French", "German", etc.).
+
+Language:"""
+
+        response = requests.post(
+            'https://api.openai.com/v1/chat/completions',
+            headers={
+                'Authorization': f'Bearer {openai_api_key}',
+                'Content-Type': 'application/json'
+            },
+            json={
+                'model': 'gpt-4o',
+                'messages': [{'role': 'user', 'content': prompt}],
+                'temperature': 0.1,
+                'max_tokens': 30
+            },
+            timeout=15
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            language = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+            return language if language else "English"
+        else:
+            return "English"
+            
+    except Exception:
+        return "English"
+
+
 def extract_industry_with_ai(content: str, company_name: str) -> str:
     """Use OpenAI to intelligently detect the business industry."""
     try:
@@ -454,9 +496,14 @@ def analyze_and_generate_html_report(business_data: Dict[str, Any]) -> Dict[str,
         business_info = data.get('business_info', {})
         company_name = business_info.get('company_name', 'Business')
         
-        # Prepare analysis prompt for OpenAI
+        # Detect website language and prepare analysis prompt
+        website_language = detect_content_language(content[:1000])
+        
+        # Prepare analysis prompt for OpenAI (adapts to website language)
         analysis_prompt = f"""
 You are an expert AI automation consultant. Analyze this business and identify exactly 3 specific AI automation opportunities.
+
+IMPORTANT: The website content is in {website_language}. Please respond in the SAME LANGUAGE as the website content.
 
 BUSINESS INFORMATION:
 - Company: {company_name}
@@ -474,6 +521,7 @@ Identify exactly 3 AI automation opportunities that are:
 - Focused on ROI within 6-12 months
 - Specific to their industry and operations
 - Do NOT mention any pricing, costs, or fees in your recommendations
+- Respond in {website_language} to match the website's language
 
 Return ONLY valid JSON in this exact format:
 {{
